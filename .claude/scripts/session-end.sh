@@ -94,6 +94,17 @@ echo "[$(date)] Transcript file found, processing..." >&2
   echo "  ▘▘ ▝▝    ~/lifecoach"
   echo ""
 
+  # First pass: collect tool IDs that read from docs/ folder
+  SKIP_IDS_FILE=$(mktemp)
+  while IFS= read -r line; do
+    echo "$line" | jq -r '
+      .message.content[]? |
+      select(.type == "tool_use" and .name == "Read") |
+      select(.input.file_path | test("docs/.*\\.(md|txt)$")) |
+      .id
+    ' >> "$SKIP_IDS_FILE" 2>/dev/null
+  done < "$TRANSCRIPT_PATH"
+
   # Extract the conversation from JSONL format with verbose mode details
   # Each line in JSONL is a complete JSON object
   while IFS= read -r line; do
@@ -116,15 +127,26 @@ echo "[$(date)] Transcript file found, processing..." >&2
         echo "> $content"
         echo ""
       else
-        # Array of content blocks - handle tool_result
+        # Array of content blocks - handle tool_result, skip context doc results
         echo "$line" | jq -r '.message.content[] |
           if .type == "text" then
-            "> " + .text
+            "TEXT:" + .text
           elif .type == "tool_result" then
-            "○ [" + .tool_use_id + "] Result:\n" + (.content | if type == "string" then . else tostring end)
+            "RESULT:" + .tool_use_id + ":END_ID:" + (.content | if type == "string" then . else tostring end)
           else
             empty
-          end'
+          end' | while IFS= read -r result_line; do
+            if [[ "$result_line" == TEXT:* ]]; then
+              echo "> ${result_line#TEXT:}"
+            elif [[ "$result_line" == RESULT:* ]]; then
+              tool_id=$(echo "$result_line" | sed 's/^RESULT:\([^:]*\):END_ID:.*/\1/')
+              if ! grep -qF "$tool_id" "$SKIP_IDS_FILE" 2>/dev/null; then
+                content=$(echo "$result_line" | sed 's/^RESULT:[^:]*:END_ID://')
+                echo "○ [$tool_id] Result:"
+                echo "$content"
+              fi
+            fi
+          done
         echo ""
       fi
     elif [ "$role" = "assistant" ]; then
@@ -134,21 +156,41 @@ echo "[$(date)] Transcript file found, processing..." >&2
         echo "● $content"
         echo ""
       else
-        # Array of content blocks - process each type
+        # Array of content blocks - process each type, skip context doc reads
         echo "$line" | jq -r '.message.content[] |
           if .type == "text" then
-            "● " + .text
+            "TEXT:" + .text
           elif .type == "thinking" then
-            "◆ Thinking:\n" + .thinking
+            "THINKING:" + .thinking
           elif .type == "tool_use" then
-            "◇ Tool: " + .name + "\n  Input: " + (.input | tostring)
+            "TOOL:" + .id + ":NAME:" + .name + ":INPUT:" + (.input | tostring)
           else
             empty
-          end'
+          end' | while IFS= read -r content_line; do
+            if [[ "$content_line" == TEXT:* ]]; then
+              echo "● ${content_line#TEXT:}"
+            elif [[ "$content_line" == THINKING:* ]]; then
+              echo "◆ Thinking:"
+              echo "${content_line#THINKING:}"
+            elif [[ "$content_line" == TOOL:* ]]; then
+              tool_id=$(echo "$content_line" | sed 's/^TOOL:\([^:]*\):NAME:.*/\1/')
+              tool_name=$(echo "$content_line" | sed 's/^TOOL:[^:]*:NAME:\([^:]*\):INPUT:.*/\1/')
+              tool_input=$(echo "$content_line" | sed 's/^TOOL:[^:]*:NAME:[^:]*:INPUT://')
+
+              # Check if this tool ID should be skipped
+              if ! grep -qF "$tool_id" "$SKIP_IDS_FILE" 2>/dev/null; then
+                echo "◇ Tool: $tool_name"
+                echo "  Input: $tool_input"
+              fi
+            fi
+          done
         echo ""
       fi
     fi
   done < "$TRANSCRIPT_PATH"
+
+  # Clean up skip IDs temp file
+  rm -f "$SKIP_IDS_FILE"
 
   echo ""
   echo ""
