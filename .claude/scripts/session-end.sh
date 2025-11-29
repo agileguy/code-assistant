@@ -1,9 +1,6 @@
 #!/bin/bash
 
-# Immediate marker file to prove hook ran
-touch "/home/dan/lifecoach/HOOK_RAN_$(date +%s).marker"
-
-# Debug logging - try direct write instead of exec redirect
+# Debug logging
 LOG_FILE="/home/dan/lifecoach/hook-debug.log"
 echo "[$(date)] ===== SessionEnd hook invoked =====" >> "$LOG_FILE" 2>&1
 exec 2>>"$LOG_FILE"
