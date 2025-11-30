@@ -1,12 +1,7 @@
 #!/bin/bash
 #
-# Universal Session End Hook for Claude CLI & Cursor CLI
+# Session End Hook for Claude Code
 # Automatically saves session transcripts to docs/ folder
-#
-# This script works with both Claude Code and Cursor by:
-# 1. Auto-detecting which tool is running
-# 2. Handling different transcript formats
-# 3. Using portable shell commands
 
 # Enable strict error handling (commented out for compatibility)
 # set -euo pipefail
@@ -15,18 +10,9 @@
 # Configuration
 # ============================================================================
 
-# Determine which tool is running based on script location
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [[ "$SCRIPT_DIR" == *".claude"* ]]; then
-    TOOL_NAME="Claude"
-    CONFIG_DIR=".claude"
-elif [[ "$SCRIPT_DIR" == *".cursor"* ]]; then
-    TOOL_NAME="Cursor"
-    CONFIG_DIR=".cursor"
-else
-    TOOL_NAME="Unknown"
-    CONFIG_DIR=".claude"  # Default fallback
-fi
+# Tool configuration
+TOOL_NAME="Claude"
+CONFIG_DIR=".claude"
 
 # Debug logging (uncomment if needed)
 # LOG_FILE="$HOME/${TOOL_NAME,,}-session-hook-debug.log"
