@@ -96,6 +96,15 @@ Session transcripts are **automatically exported** when your Claude Code session
 - The SessionEnd hook runs automatically on every session end
 - No manual export needed - just exit normally
 
+**Requirements:**
+- `jq` must be installed for JSON processing (the script will check and provide a clear error if missing)
+- Cross-platform support: Works on Linux and macOS
+
+**Debug Mode:**
+- Enable verbose debug logging by setting `CLAUDE_HOOK_DEBUG=1` environment variable
+- Optionally set `CLAUDE_HOOK_LOG_FILE` to specify a custom log file path
+- Debug logs include environment variables, raw input data, and processing steps
+
 **Benefits:**
 - Track technical decisions over time
 - Review past code review discussions
@@ -141,11 +150,29 @@ The assistant emphasizes:
 ## Getting Started
 
 1. Clone or download this repository
-2. Start Claude Code in this directory
-3. Add any project-specific documents to `docs/`
-4. Begin coding or ask for a code review!
+2. Install `jq` if not already installed:
+   - **macOS**: `brew install jq`
+   - **Linux (Debian/Ubuntu)**: `sudo apt-get install jq`
+   - **Linux (RHEL/CentOS)**: `sudo yum install jq`
+3. Start Claude Code in this directory
+4. Add any project-specific documents to `docs/`
+5. Begin coding or ask for a code review!
+
+**Note:** The session transcript export hook requires `jq` to be installed. The script will check for this dependency and provide a helpful error message if it's missing.
 
 ## Recent Changes
+
+### Latest Updates
+- **Enhanced session-end.sh script**:
+  - Added cross-platform compatibility (Linux and macOS)
+  - Added dependency check for `jq` with clear error messages
+  - Improved error handling with `set -euo pipefail`
+  - Added automatic cleanup of temporary files using trap
+  - Made debug logging optional via `CLAUDE_HOOK_DEBUG` environment variable
+- **Documentation improvements**:
+  - Removed references to non-existent files from CLAUDE.md
+  - Added LICENSE file (MIT License)
+  - Updated README with requirements and debug mode information
 
 ### 2025-11-29
 - **Forked from lifecoach repository**: Transformed from life coaching assistant to Python code assistant

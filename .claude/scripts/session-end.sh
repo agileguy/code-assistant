@@ -1,68 +1,106 @@
 #!/bin/bash
 
-# Debug logging (optional - comment out if not needed)
-# LOG_FILE="$HOME/code-assistant-hook-debug.log"
-# echo "[$(date)] ===== SessionEnd hook invoked =====" >> "$LOG_FILE" 2>&1
-# exec 2>>"$LOG_FILE"
+# Enable strict error handling
+set -euo pipefail
 
-# Log all environment variables that might be relevant
-echo "[$(date)] Environment variables:" >&2
-env | grep -i "claude\|session\|transcript" | sort >&2 || echo "  (none found)" >&2
+# Check for required dependencies
+if ! command -v jq &> /dev/null; then
+    echo "Error: jq is required but not installed. Please install jq to use this script." >&2
+    exit 1
+fi
 
-# Create a temporary file to store the hook data
+# Debug logging (controlled by environment variable)
+# Set CLAUDE_HOOK_DEBUG=1 to enable verbose debug logging
+if [ "${CLAUDE_HOOK_DEBUG:-0}" = "1" ]; then
+    LOG_FILE="${CLAUDE_HOOK_LOG_FILE:-$HOME/code-assistant-hook-debug.log}"
+    echo "[$(date)] ===== SessionEnd hook invoked =====" >> "$LOG_FILE" 2>&1
+    exec 2>>"$LOG_FILE"
+    
+    # Log all environment variables that might be relevant
+    echo "[$(date)] Environment variables:" >&2
+    env | grep -i "claude\|session\|transcript" | sort >&2 || echo "  (none found)" >&2
+fi
+
+# Create temporary files
 TEMP_JSON=$(mktemp)
+SKIP_IDS_FILE=$(mktemp)
+
+# Cleanup function for temporary files
+cleanup() {
+    rm -f "$TEMP_JSON" "$SKIP_IDS_FILE" 2>/dev/null || true
+}
+
+# Ensure cleanup runs on exit
+trap cleanup EXIT
 
 # Read ALL stdin - wait for natural EOF (no timeout)
 # This is more reliable than using timeout
 cat > "$TEMP_JSON" 2>&1
 
-# Get file size to check if we received data
-FILE_SIZE=$(stat -c%s "$TEMP_JSON" 2>/dev/null || echo "0")
-echo "[$(date)] Read $FILE_SIZE bytes from stdin" >&2
+# Get file size to check if we received data (cross-platform compatible)
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    # macOS
+    FILE_SIZE=$(stat -f%z "$TEMP_JSON" 2>/dev/null || echo "0")
+else
+    # Linux and other Unix-like systems
+    FILE_SIZE=$(stat -c%s "$TEMP_JSON" 2>/dev/null || echo "0")
+fi
 
-# Log the raw data received for debugging
-echo "[$(date)] Raw stdin data:" >&2
-cat "$TEMP_JSON" >&2
-echo "[$(date)] --- End raw data ---" >&2
+if [ "${CLAUDE_HOOK_DEBUG:-0}" = "1" ]; then
+    echo "[$(date)] Read $FILE_SIZE bytes from stdin" >&2
+    
+    # Log the raw data received for debugging
+    echo "[$(date)] Raw stdin data:" >&2
+    cat "$TEMP_JSON" >&2
+    echo "[$(date)] --- End raw data ---" >&2
+fi
 
 # If we got no data or very little data, something is wrong
 if [ "$FILE_SIZE" -lt 10 ]; then
   echo "[$(date)] ERROR: Received insufficient data from stdin ($FILE_SIZE bytes)" >&2
   echo "[$(date)] This likely means Claude Code is not sending hook data properly" >&2
-  rm -f "$TEMP_JSON"
   exit 1
 fi
 
 # Validate JSON before parsing
 if ! jq empty < "$TEMP_JSON" 2>&1; then
   echo "[$(date)] ERROR: Invalid JSON received on stdin" >&2
-  rm -f "$TEMP_JSON"
   exit 1
 fi
 
-echo "[$(date)] JSON validation passed" >&2
+if [ "${CLAUDE_HOOK_DEBUG:-0}" = "1" ]; then
+    echo "[$(date)] JSON validation passed" >&2
+fi
 
 # Parse the JSON input from the file
-SESSION_ID=$(jq -r '.session_id // "unknown"' < "$TEMP_JSON" 2>&1)
-TRANSCRIPT_PATH=$(jq -r '.transcript_path // ""' < "$TEMP_JSON" 2>&1)
-CWD=$(jq -r '.cwd // ""' < "$TEMP_JSON" 2>&1)
-REASON=$(jq -r '.reason // "exit"' < "$TEMP_JSON" 2>&1)
+SESSION_ID=$(jq -r '.session_id // "unknown"' < "$TEMP_JSON")
+TRANSCRIPT_PATH=$(jq -r '.transcript_path // ""' < "$TEMP_JSON")
+CWD=$(jq -r '.cwd // ""' < "$TEMP_JSON")
+REASON=$(jq -r '.reason // "exit"' < "$TEMP_JSON")
 
-echo "[$(date)] Parsed - SESSION_ID=$SESSION_ID, TRANSCRIPT_PATH=$TRANSCRIPT_PATH, CWD=$CWD, REASON=$REASON" >&2
+if [ "${CLAUDE_HOOK_DEBUG:-0}" = "1" ]; then
+    echo "[$(date)] Parsed - SESSION_ID=$SESSION_ID, TRANSCRIPT_PATH=$TRANSCRIPT_PATH, CWD=$CWD, REASON=$REASON" >&2
+fi
 
 # Change to the repository root directory
 if [ -n "$CWD" ] && [ -d "$CWD" ]; then
   cd "$CWD" || {
     echo "[$(date)] Warning: Failed to cd to $CWD" >&2
+    exit 1
   }
-  echo "[$(date)] Changed to directory: $CWD" >&2
+  if [ "${CLAUDE_HOOK_DEBUG:-0}" = "1" ]; then
+      echo "[$(date)] Changed to directory: $CWD" >&2
+  fi
 else
   echo "[$(date)] Warning: CWD not set or not a directory: $CWD" >&2
+  exit 1
 fi
 
 # Expand tilde in transcript path
 TRANSCRIPT_PATH="${TRANSCRIPT_PATH/#\~/$HOME}"
-echo "[$(date)] Expanded TRANSCRIPT_PATH=$TRANSCRIPT_PATH" >&2
+if [ "${CLAUDE_HOOK_DEBUG:-0}" = "1" ]; then
+    echo "[$(date)] Expanded TRANSCRIPT_PATH=$TRANSCRIPT_PATH" >&2
+fi
 
 # Generate timestamp
 TIMESTAMP=$(date +"%Y-%m-%d-%H%M")
@@ -77,11 +115,12 @@ mkdir -p "$DOCS_DIR" || true
 # Check if transcript file exists
 if [ -z "$TRANSCRIPT_PATH" ] || [ ! -f "$TRANSCRIPT_PATH" ]; then
   echo "[$(date)] Warning: Transcript file not found at: $TRANSCRIPT_PATH" >&2
-  rm -f "$TEMP_JSON"
   exit 0
 fi
 
-echo "[$(date)] Transcript file found, processing..." >&2
+if [ "${CLAUDE_HOOK_DEBUG:-0}" = "1" ]; then
+    echo "[$(date)] Transcript file found, processing..." >&2
+fi
 
 # Create the output file with header and conversation
 {
@@ -92,7 +131,6 @@ echo "[$(date)] Transcript file found, processing..." >&2
   echo ""
 
   # First pass: collect tool IDs that read from docs/ folder
-  SKIP_IDS_FILE=$(mktemp)
   while IFS= read -r line; do
     echo "$line" | jq -r '
       .message.content[]? |
@@ -186,16 +224,12 @@ echo "[$(date)] Transcript file found, processing..." >&2
     fi
   done < "$TRANSCRIPT_PATH"
 
-  # Clean up skip IDs temp file
-  rm -f "$SKIP_IDS_FILE"
-
   echo ""
   echo ""
 } > "$OUTPUT_FILE"
 
-# Clean up temporary file
-rm -f "$TEMP_JSON"
-
-# Print confirmation message and log
+# Print confirmation message
 echo "Session transcript saved to: $OUTPUT_FILE"
-echo "[$(date)] Successfully created transcript at: $OUTPUT_FILE" >&2
+if [ "${CLAUDE_HOOK_DEBUG:-0}" = "1" ]; then
+    echo "[$(date)] Successfully created transcript at: $OUTPUT_FILE" >&2
+fi

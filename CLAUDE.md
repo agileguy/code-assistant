@@ -202,14 +202,16 @@ This creates a record of:
 - Questions and answers
 - Code changes and rationale
 
+**Technical notes:**
+- The session-end.sh script requires `jq` to be installed (dependency is checked automatically)
+- The script supports both Linux and macOS platforms
+- Debug logging can be enabled via `CLAUDE_HOOK_DEBUG=1` environment variable if troubleshooting is needed
+- The script includes robust error handling and automatic cleanup of temporary files
+
 ## Reference Documents
 
 Consult these for guidance:
 - `python-best-practices.md` - Comprehensive Python best practices and patterns
-- `code-review-guidelines.md` - Detailed code review checklist and approach
-- `common-pitfalls.md` - Common Python mistakes and how to avoid them
-
-(Note: These reference documents are mentioned for future implementation)
 
 ## Session Approach
 
