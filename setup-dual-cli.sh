@@ -99,7 +99,7 @@ echo "Verifying configuration files..."
 REQUIRED_FILES=(
     ".claude/settings.json:Claude hook configuration"
     ".claude/scripts/session-end.sh:Claude session hook script"
-    ".cursor/settings.json:Cursor hook configuration"
+    ".cursor/hooks.json:Cursor hook configuration"
     ".cursor/scripts/session-end.sh:Cursor session hook script"
     ".cursorrules:Cursor rules file"
     "CLAUDE.md:Claude instructions file"
@@ -153,11 +153,11 @@ else
     echo "✗ Claude settings.json has invalid JSON"
 fi
 
-# Test Cursor settings.json
-if jq empty < "$WORKSPACE_ROOT/.cursor/settings.json" 2>/dev/null; then
-    echo "✓ Cursor settings.json is valid JSON"
+# Test Cursor hooks.json
+if jq empty < "$WORKSPACE_ROOT/.cursor/hooks.json" 2>/dev/null; then
+    echo "✓ Cursor hooks.json is valid JSON"
 else
-    echo "✗ Cursor settings.json has invalid JSON"
+    echo "✗ Cursor hooks.json has invalid JSON"
 fi
 
 # ============================================================================

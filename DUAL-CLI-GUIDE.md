@@ -63,7 +63,7 @@ project/
 │       └── session-end.sh       # SessionEnd hook
 │
 ├── .cursor/                      # Cursor configuration
-│   ├── settings.json            # Hook configuration
+│   ├── hooks.json               # Hook configuration (Cursor format)
 │   └── scripts/
 │       └── session-end.sh       # SessionEnd hook
 │
@@ -135,10 +135,9 @@ docs/
 
 ## Configuration Files
 
-### `.claude/settings.json` & `.cursor/settings.json`
+### `.claude/settings.json` & `.cursor/hooks.json`
 
-Both files have identical structure:
-
+**Claude CLI** uses `settings.json`:
 ```json
 {
   "hooks": {
@@ -156,7 +155,21 @@ Both files have identical structure:
 }
 ```
 
-The only difference is the path to the script.
+**Cursor** uses `hooks.json` (different format):
+```json
+{
+  "version": 1,
+  "hooks": {
+    "stop": [
+      {
+        "command": ".cursor/scripts/session-end.sh"
+      }
+    ]
+  }
+}
+```
+
+**Note**: Cursor uses a different configuration format (`hooks.json` with `stop` event) compared to Claude CLI (`settings.json` with `SessionEnd` event). This reflects each tool's specific configuration requirements.
 
 ### `CLAUDE.md` & `.cursorrules`
 
@@ -337,7 +350,7 @@ select(.input.path | test("docs/.*\\.(md|txt)$")) |
 3. Verify JSON configuration:
    ```bash
    jq empty < .claude/settings.json
-   jq empty < .cursor/settings.json
+   jq empty < .cursor/hooks.json
    ```
 
 4. Enable debug logging (see Advanced Usage)
@@ -522,11 +535,19 @@ If you're migrating from a single-CLI setup:
 # 1. Create Cursor configuration
 mkdir -p .cursor/scripts
 
-# 2. Copy settings
-cp .claude/settings.json .cursor/settings.json
-
-# 3. Update script path in .cursor/settings.json
-# Change: ".claude/scripts/" → ".cursor/scripts/"
+# 2. Create Cursor hooks.json (different format)
+cat > .cursor/hooks.json << 'EOF'
+{
+  "version": 1,
+  "hooks": {
+    "stop": [
+      {
+        "command": ".cursor/scripts/session-end.sh"
+      }
+    ]
+  }
+}
+EOF
 
 # 4. Copy script
 cp .claude/scripts/session-end.sh .cursor/scripts/
@@ -544,11 +565,23 @@ cp CLAUDE.md .cursorrules
 # 1. Create Claude configuration
 mkdir -p .claude/scripts
 
-# 2. Copy settings
-cp .cursor/settings.json .claude/settings.json
-
-# 3. Update script path in .claude/settings.json
-# Change: ".cursor/scripts/" → ".claude/scripts/"
+# 2. Create Claude settings.json (different format)
+cat > .claude/settings.json << 'EOF'
+{
+  "hooks": {
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/scripts/session-end.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
+EOF
 
 # 4. Copy script
 cp .cursor/scripts/session-end.sh .claude/scripts/

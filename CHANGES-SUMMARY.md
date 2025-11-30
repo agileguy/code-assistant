@@ -93,10 +93,11 @@ November 30, 2025
 
 ### 4. Configuration Updates
 
-#### `.claude/settings.json` & `.cursor/settings.json`
-- Both configured with SessionEnd hooks
-- Pointing to respective script locations
-- Identical structure for consistency
+#### `.claude/settings.json` & `.cursor/hooks.json`
+- Claude uses `settings.json` with `SessionEnd` hook format
+- Cursor uses `hooks.json` with `stop` hook format (version 1)
+- Both pointing to respective script locations
+- Different formats reflect each tool's configuration requirements
 
 #### `.gitignore`
 - Updated to handle debug logs from both tools
@@ -135,16 +136,20 @@ November 30, 2025
 
 ### New Files (7)
 1. `.cursorrules` - Cursor instructions
-2. `.cursor/settings.json` - Cursor hook config
+2. `.cursor/hooks.json` - Cursor hook config (replaces settings.json)
 3. `.cursor/scripts/session-end.sh` - Cursor hook script
 4. `setup-dual-cli.sh` - Setup automation
 5. `DUAL-CLI-GUIDE.md` - Comprehensive guide
 6. `CHANGES-SUMMARY.md` - This file
+7. `WORKSPACE-REVIEW.md` - Comprehensive workspace review document
 
 ### Modified Files (3)
 1. `README.md` - Updated for dual CLI
-2. `.claude/scripts/session-end.sh` - Improved version
+2. `.claude/scripts/session-end.sh` - Improved version (cleaned up duplicate code)
 3. `.gitignore` - Better log handling
+
+### Configuration Changes
+- `.cursor/settings.json` → `.cursor/hooks.json` (Cursor format change)
 
 ### Unchanged Files
 - `CLAUDE.md` - Original instructions (still used by Claude)
@@ -180,6 +185,9 @@ November 30, 2025
 ✓ Box-drawing character formatting
 ✓ Truncation of long outputs
 ✓ Skip filtering for context docs
+✓ Removed duplicate code blocks
+✓ Simplified error handling
+✓ Cleaner code structure
 ```
 
 ## Testing & Verification

@@ -48,7 +48,7 @@ User starts CLI tool
         │                → loads .claude/settings.json
         │
         └─── Cursor    → reads .cursorrules
-                       → loads .cursor/settings.json
+                       → loads .cursor/hooks.json
         
         Both read docs/*.md for project context
 ```
@@ -95,7 +95,7 @@ Project Root
 ├── Cursor Setup
 │   │
 │   ├── .cursor/
-│   │   ├── settings.json
+│   │   ├── hooks.json
 │   │   │   └── points to → session-end.sh
 │   │   │
 │   │   └── scripts/
@@ -138,6 +138,7 @@ Project Root
 
 ### 2. Hook Configuration
 
+**Claude CLI** (`.claude/settings.json`):
 ```json
 {
   "hooks": {
@@ -146,9 +147,23 @@ Project Root
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/scripts/session-end.sh"  // or .cursor/...
+            "command": ".claude/scripts/session-end.sh"
           }
         ]
+      }
+    ]
+  }
+}
+```
+
+**Cursor** (`.cursor/hooks.json`):
+```json
+{
+  "version": 1,
+  "hooks": {
+    "stop": [
+      {
+        "command": ".cursor/scripts/session-end.sh"
       }
     ]
   }
@@ -261,7 +276,7 @@ User: Opens Cursor IDE
 
 1. Cursor starts
    ├─ Reads .cursorrules
-   ├─ Loads .cursor/settings.json
+   ├─ Loads .cursor/hooks.json
    └─ Reads docs/*.md
 
 2. Assistant helps with feature
@@ -391,8 +406,7 @@ expand_path() {
 
 ### Settings Files
 
-Both `.claude/settings.json` and `.cursor/settings.json`:
-
+**Claude CLI** (`.claude/settings.json`):
 ```json
 {
   "hooks": {
@@ -401,7 +415,7 @@ Both `.claude/settings.json` and `.cursor/settings.json`:
         "hooks": [
           {
             "type": "command",
-            "command": "<path-to-script>"
+            "command": ".claude/scripts/session-end.sh"
           }
         ]
       }
@@ -410,12 +424,28 @@ Both `.claude/settings.json` and `.cursor/settings.json`:
 }
 ```
 
+**Cursor** (`.cursor/hooks.json`):
+```json
+{
+  "version": 1,
+  "hooks": {
+    "stop": [
+      {
+        "command": ".cursor/scripts/session-end.sh"
+      }
+    ]
+  }
+}
+```
+
+**Note**: Cursor uses `hooks.json` with a different format (`stop` event instead of `SessionEnd`), while Claude CLI uses `settings.json` with the `SessionEnd` event format.
+
 ### Validation
 
 ```bash
 # Automatic validation in setup script
 jq empty < .claude/settings.json
-jq empty < .cursor/settings.json
+jq empty < .cursor/hooks.json
 ```
 
 ## Error Handling

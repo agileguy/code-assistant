@@ -131,7 +131,7 @@ Session transcripts are **automatically exported** when your session ends (works
 
 **Configuration:**
 - Claude hook: `.claude/settings.json` → `.claude/scripts/session-end.sh`
-- Cursor hook: `.cursor/settings.json` → `.cursor/scripts/session-end.sh`
+- Cursor hook: `.cursor/hooks.json` → `.cursor/scripts/session-end.sh`
 - The SessionEnd hook runs automatically on every session end
 - No manual export needed - just exit normally
 - Works cross-platform (macOS & Linux)
@@ -243,6 +243,9 @@ The assistant will automatically read these at session start!
 ## Documentation
 
 - **[DUAL-CLI-GUIDE.md](DUAL-CLI-GUIDE.md)** - Comprehensive guide for using both CLIs
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** - Detailed architecture and design documentation
+- **[CHANGES-SUMMARY.md](CHANGES-SUMMARY.md)** - Summary of changes and improvements
+- **[WORKSPACE-REVIEW.md](WORKSPACE-REVIEW.md)** - Comprehensive workspace review and code quality assessment
 - **[docs/python-best-practices.md](docs/python-best-practices.md)** - Python reference guide
 - **[CLAUDE.md](CLAUDE.md)** - Full assistant instructions
 
@@ -256,7 +259,7 @@ code-assistant/
 │       └── session-end.sh       # Transcript export script
 │
 ├── .cursor/                      # Cursor configuration
-│   ├── settings.json            # Hook settings
+│   ├── hooks.json               # Hook settings (Cursor format)
 │   └── scripts/
 │       └── session-end.sh       # Transcript export script
 │
@@ -306,6 +309,12 @@ code-assistant/
 
 ## Recent Changes
 
+### 2025-11-30 (Latest)
+- **🔧 Script improvements**: Cleaned up duplicate code in session-end.sh
+- **📝 Cursor config update**: Changed from `settings.json` to `hooks.json` (Cursor format)
+- **📋 Workspace review**: Added comprehensive workspace review document
+- **✨ Code cleanup**: Simplified error handling and removed redundant code blocks
+
 ### 2025-11-30
 - **✨ Added Cursor CLI support**: Full dual CLI configuration
 - **Created `.cursorrules`**: Cursor-specific instructions file
@@ -317,6 +326,9 @@ code-assistant/
 - **Fixed portability**: macOS and Linux compatible `stat` usage
 - **Improved timestamps**: Added seconds to prevent collisions
 - **Better error handling**: Proper directory validation
+
+## Installation
+
 1. Clone or download this repository
 2. Install `jq` if not already installed:
    - **macOS**: `brew install jq`
