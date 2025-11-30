@@ -86,6 +86,38 @@ TEMP_JSON=$(mktemp) || {
 
 # Ensure cleanup on exit
 trap 'rm -f "$TEMP_JSON"' EXIT
+# Enable strict error handling
+set -euo pipefail
+
+# Check for required dependencies
+if ! command -v jq &> /dev/null; then
+    echo "Error: jq is required but not installed. Please install jq to use this script." >&2
+    exit 1
+fi
+
+# Debug logging (controlled by environment variable)
+# Set CLAUDE_HOOK_DEBUG=1 to enable verbose debug logging
+if [ "${CLAUDE_HOOK_DEBUG:-0}" = "1" ]; then
+    LOG_FILE="${CLAUDE_HOOK_LOG_FILE:-$HOME/code-assistant-hook-debug.log}"
+    echo "[$(date)] ===== SessionEnd hook invoked =====" >> "$LOG_FILE" 2>&1
+    exec 2>>"$LOG_FILE"
+    
+    # Log all environment variables that might be relevant
+    echo "[$(date)] Environment variables:" >&2
+    env | grep -i "claude\|session\|transcript" | sort >&2 || echo "  (none found)" >&2
+fi
+
+# Create temporary files
+TEMP_JSON=$(mktemp)
+SKIP_IDS_FILE=$(mktemp)
+
+# Cleanup function for temporary files
+cleanup() {
+    rm -f "$TEMP_JSON" "$SKIP_IDS_FILE" 2>/dev/null || true
+}
+
+# Ensure cleanup runs on exit
+trap cleanup EXIT
 
 # Read stdin data (wait for EOF without timeout)
 cat > "$TEMP_JSON" 2>&1
@@ -98,6 +130,29 @@ if [[ "$FILE_SIZE" -lt 10 ]]; then
     echo "[$(date)] ERROR: Received insufficient data ($FILE_SIZE bytes)" >&2
     echo "[$(date)] $TOOL_NAME may not be sending hook data properly" >&2
     exit 1
+# Get file size to check if we received data (cross-platform compatible)
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    # macOS
+    FILE_SIZE=$(stat -f%z "$TEMP_JSON" 2>/dev/null || echo "0")
+else
+    # Linux and other Unix-like systems
+    FILE_SIZE=$(stat -c%s "$TEMP_JSON" 2>/dev/null || echo "0")
+fi
+
+if [ "${CLAUDE_HOOK_DEBUG:-0}" = "1" ]; then
+    echo "[$(date)] Read $FILE_SIZE bytes from stdin" >&2
+    
+    # Log the raw data received for debugging
+    echo "[$(date)] Raw stdin data:" >&2
+    cat "$TEMP_JSON" >&2
+    echo "[$(date)] --- End raw data ---" >&2
+fi
+
+# If we got no data or very little data, something is wrong
+if [ "$FILE_SIZE" -lt 10 ]; then
+  echo "[$(date)] ERROR: Received insufficient data from stdin ($FILE_SIZE bytes)" >&2
+  echo "[$(date)] This likely means Claude Code is not sending hook data properly" >&2
+  exit 1
 fi
 
 # Log raw data for debugging (first 500 chars)
@@ -110,9 +165,13 @@ echo "[$(date)] --- End preview ---" >&2
 if ! jq empty < "$TEMP_JSON" 2>&1; then
     echo "[$(date)] ERROR: Invalid JSON received from $TOOL_NAME" >&2
     exit 1
+  echo "[$(date)] ERROR: Invalid JSON received on stdin" >&2
+  exit 1
 fi
 
-echo "[$(date)] JSON validation passed" >&2
+if [ "${CLAUDE_HOOK_DEBUG:-0}" = "1" ]; then
+    echo "[$(date)] JSON validation passed" >&2
+fi
 
 # ============================================================================
 # Parse Hook Data
@@ -143,6 +202,35 @@ fi
 # Expand transcript path
 TRANSCRIPT_PATH=$(expand_path "$TRANSCRIPT_PATH")
 echo "[$(date)] Expanded transcript path: $TRANSCRIPT_PATH" >&2
+# Parse the JSON input from the file
+SESSION_ID=$(jq -r '.session_id // "unknown"' < "$TEMP_JSON")
+TRANSCRIPT_PATH=$(jq -r '.transcript_path // ""' < "$TEMP_JSON")
+CWD=$(jq -r '.cwd // ""' < "$TEMP_JSON")
+REASON=$(jq -r '.reason // "exit"' < "$TEMP_JSON")
+
+if [ "${CLAUDE_HOOK_DEBUG:-0}" = "1" ]; then
+    echo "[$(date)] Parsed - SESSION_ID=$SESSION_ID, TRANSCRIPT_PATH=$TRANSCRIPT_PATH, CWD=$CWD, REASON=$REASON" >&2
+fi
+
+# Change to the repository root directory
+if [ -n "$CWD" ] && [ -d "$CWD" ]; then
+  cd "$CWD" || {
+    echo "[$(date)] Warning: Failed to cd to $CWD" >&2
+    exit 1
+  }
+  if [ "${CLAUDE_HOOK_DEBUG:-0}" = "1" ]; then
+      echo "[$(date)] Changed to directory: $CWD" >&2
+  fi
+else
+  echo "[$(date)] Warning: CWD not set or not a directory: $CWD" >&2
+  exit 1
+fi
+
+# Expand tilde in transcript path
+TRANSCRIPT_PATH="${TRANSCRIPT_PATH/#\~/$HOME}"
+if [ "${CLAUDE_HOOK_DEBUG:-0}" = "1" ]; then
+    echo "[$(date)] Expanded TRANSCRIPT_PATH=$TRANSCRIPT_PATH" >&2
+fi
 
 # ============================================================================
 # Setup Output File
@@ -176,9 +264,15 @@ if [[ -z "$TRANSCRIPT_PATH" ]] || [[ ! -f "$TRANSCRIPT_PATH" ]]; then
     echo "[$(date)] ERROR: Transcript file not found: $TRANSCRIPT_PATH" >&2
     echo "[$(date)] Cannot export session transcript" >&2
     exit 1
+# Check if transcript file exists
+if [ -z "$TRANSCRIPT_PATH" ] || [ ! -f "$TRANSCRIPT_PATH" ]; then
+  echo "[$(date)] Warning: Transcript file not found at: $TRANSCRIPT_PATH" >&2
+  exit 0
 fi
 
-echo "[$(date)] Transcript file found, processing..." >&2
+if [ "${CLAUDE_HOOK_DEBUG:-0}" = "1" ]; then
+    echo "[$(date)] Transcript file found, processing..." >&2
+fi
 
 # ============================================================================
 # Generate Formatted Transcript
@@ -196,6 +290,30 @@ echo "[$(date)] Transcript file found, processing..." >&2
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
+  echo ""
+  echo " ▐▛███▜▌   Claude Code v2.0.55"
+  echo "▝▜█████▛▘  Sonnet 4.5 · Claude Pro"
+  echo "  ▘▘ ▝▝    Code Assistant - Python Expert"
+  echo ""
+
+  # First pass: collect tool IDs that read from docs/ folder
+  while IFS= read -r line; do
+    echo "$line" | jq -r '
+      .message.content[]? |
+      select(.type == "tool_use" and .name == "Read") |
+      select(.input.file_path | test("docs/.*\\.(md|txt)$")) |
+      .id
+    ' >> "$SKIP_IDS_FILE" 2>/dev/null
+  done < "$TRANSCRIPT_PATH"
+
+  # Extract the conversation from JSONL format with verbose mode details
+  # Each line in JSONL is a complete JSON object
+  while IFS= read -r line; do
+    # Skip non-message lines (file-history-snapshot, summary, etc.)
+    msg_type=$(echo "$line" | jq -r '.type // ""')
+    if [ "$msg_type" != "user" ] && [ "$msg_type" != "assistant" ]; then
+      continue
+    fi
 
     # First pass: collect tool IDs that read from docs/ folder
     # (Skip these from output to avoid clutter)
@@ -344,3 +462,12 @@ echo "" >&2
 
 echo "[$(date)] Successfully created transcript at: $OUTPUT_FILE" >&2
 exit 0
+  echo ""
+  echo ""
+} > "$OUTPUT_FILE"
+
+# Print confirmation message
+echo "Session transcript saved to: $OUTPUT_FILE"
+if [ "${CLAUDE_HOOK_DEBUG:-0}" = "1" ]; then
+    echo "[$(date)] Successfully created transcript at: $OUTPUT_FILE" >&2
+fi
