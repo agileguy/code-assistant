@@ -27,7 +27,6 @@
 # Debug logs from hooks
 *-session-hook-debug.log
 claude-session-hook-debug.log
-cursor-session-hook-debug.log
 
 # Logs and databases #
 ######################
