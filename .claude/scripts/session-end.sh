@@ -313,7 +313,7 @@ echo "[$(date)] Transcript file found, processing..." >&2
                         
                         echo "│"
                         echo "│ ◇ Tool: $tool_name"
-                        echo "│   Input: $tool_input" | head -5 | sed 's/^/│   /'
+                        echo "Input: $tool_input" | head -5 | sed 's/^/│   /'
                     fi
                 done
                 echo "│"
