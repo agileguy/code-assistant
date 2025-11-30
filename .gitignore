@@ -20,8 +20,14 @@
 *.tar
 *.zip
 
-# Exported conversations
-docs/20*.txt
+# Session transcripts (optional - consider keeping for team knowledge)
+# Uncomment to ignore transcripts:
+# docs/20*.txt
+
+# Debug logs from hooks
+*-session-hook-debug.log
+claude-session-hook-debug.log
+cursor-session-hook-debug.log
 
 # Logs and databases #
 ######################

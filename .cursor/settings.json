@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".cursor/scripts/session-end.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
